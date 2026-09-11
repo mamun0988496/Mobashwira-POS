@@ -1,0 +1,104 @@
+{
+  "name": "mobashwira-pos-app",
+  "version": "1.0.0",
+  "description": "Shop Manager POS and ERP Desktop Application",
+  "author": "Mehedi",
+  "main": "main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "electron:dev": "electron .",
+    "build:server": "node build-server.cjs",
+    "build:app": "npm run build && npm run build:server",
+    "dist": "npm run build:app && electron-builder",
+    "dist:win": "npm run build:app && electron-builder --win nsis"
+  },
+  "build": {
+    "appId": "com.mobashwira.posapp",
+    "productName": "Mobashwira POS",
+    "directories": {
+      "buildResources": "build",
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-server/**/*",
+      "main.cjs",
+      "splash.html",
+      "build/**/*",
+      "logo.png",
+      "icon.ico",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "shortcutName": "Mobashwira POS",
+      "uninstallDisplayName": "Mobashwira POS",
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true
+    },
+    "asarUnpack": [
+      "dist-server/**/*",
+      "dist/**/*",
+      "server/**/*",
+      "shop_database.db",
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/sqlite3/**/*"
+    ]
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "clsx": "^2.1.1",
+    "cors": "^2.8.6",
+    "electron-store": "^11.0.2",
+    "express": "^5.2.1",
+    "framer-motion": "^13.0.0",
+    "googleapis": "^176.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "lucide-react": "^1.30.0",
+    "motion": "^13.0.0",
+    "qrcode-terminal": "^0.12.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-select": "^5.10.2",
+    "recharts": "^3.10.1",
+    "sql.js": "^1.14.1",
+    "tailwind-merge": "^3.6.0",
+    "whatsapp-web.js": "^1.34.7"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.9.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.1",
+    "autoprefixer": "^10.5.4",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "esbuild": "^0.28.2",
+    "eslint": "^9.9.0",
+    "eslint-plugin-react": "^7.35.0",
+    "eslint-plugin-react-hooks": "^5.1.0-rc.0",
+    "eslint-plugin-react-refresh": "^0.4.9",
+    "globals": "^15.9.0",
+    "postcss": "^8.5.26",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.23.11",
+    "vite": "^5.4.1"
+  },
+  "productName": "Mobashwira POS"
+}

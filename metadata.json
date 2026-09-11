@@ -1,0 +1,6 @@
+{
+  "name": "Shop Manager POS & ERP",
+  "description": "Comprehensive Shop Management System with POS Sales, Inventory, Customers, Suppliers, Purchases, Due Management, Expenses, Reports, User Roles, Backup & Restore, and Settings.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
