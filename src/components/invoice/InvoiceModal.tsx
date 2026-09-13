@@ -11,6 +11,7 @@ interface InvoiceModalProps {
 }
 
 export const InvoiceModal: React.FC<InvoiceModalProps> = ({ sale, isOpen, onClose }) => {
+  // settings থেকে ডায়নামিক ডেটা নেওয়া হচ্ছে
   const { settings, formatCurrency } = useShop();
   const printRef = useRef<HTMLDivElement>(null);
 
@@ -22,7 +23,6 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ sale, isOpen, onClos
 
   const is58mm = settings.invoice_design === '58mm';
 
-  // ডাটাবেস থেকে আসা প্রোডাক্ট লিস্ট ঠিক করার জন্য আরও স্ট্রং লজিক
   let invoiceItems: any[] = [];
   try {
     const saleData = sale as any;
@@ -42,6 +42,11 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ sale, isOpen, onClos
   } catch (error) {
     console.error("Error parsing items:", error);
   }
+
+  // Fallback values যদি settings এ ডেটা না থাকে
+  const displayShopName = settings.shop_name || 'মোবাশ্বিরা পশু পাখির ঔষধ ঘর';
+  const displayAddress = settings.address || 'বটতলী মোড়, বামনডাঙ্গা, সুন্দরগঞ্জ, গাইবান্ধা';
+  const displayPhone = settings.phone || '01788183164';
 
   return (
     <AnimatePresence>
@@ -75,14 +80,17 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ sale, isOpen, onClos
           {/* Printable Invoice Container */}
           <div ref={printRef} className={`mt-4 p-6 bg-white text-slate-900 font-sans print:p-0 ${is58mm ? 'max-w-xs mx-auto border border-dashed border-slate-300 p-4' : ''}`}>
             
-            {/* Header / Shop Info */}
+            {/* Header / Shop Info - এখানে ডায়নামিক ডেটা বসানো হয়েছে */}
             <div className="text-center pb-4 border-b border-slate-200">
               {settings.logo && (
                 <img src={settings.logo} alt="Logo" className="w-12 h-12 mx-auto rounded-xl object-contain mb-2" />
               )}
-              <h2 className="text-2xl font-bold text-slate-800">মোবাশ্বিরা পশু পাখির ঔষধ ঘর</h2>
-              <p className="text-slate-600 text-[13px] mt-1">বটতলী মোড়, বামনডাঙ্গা, সুন্দরগঞ্জ, গাইবান্ধা</p>
-              <p className="text-slate-600 text-[13px] mt-0.5 font-medium">মোবাইল: 01788183164</p>
+              <h2 className="text-2xl font-bold text-slate-800">{displayShopName}</h2>
+              <p className="text-slate-600 text-[13px] mt-1">{displayAddress}</p>
+              <p className="text-slate-600 text-[13px] mt-0.5 font-medium">মোবাইল: {displayPhone}</p>
+              {settings.email && (
+                <p className="text-slate-500 text-[12px] mt-0.5">{settings.email}</p>
+              )}
             </div>
 
             {/* Meta Details */}
@@ -110,7 +118,6 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ sale, isOpen, onClos
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {invoiceItems.map((item, idx) => {
-                  // Fallbacks for extracting correct product data
                   const itemName = item.product_name || item.name || item.title || 'Unknown Item';
                   const itemQty = item.qty || item.quantity || 1;
                   const itemPrice = item.unit_price || item.price || 0;
@@ -174,7 +181,6 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ sale, isOpen, onClos
                 </div>
               )}
             </div>
-
           </div>
 
           <div className="mt-4 flex justify-end print:hidden">

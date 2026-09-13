@@ -3,10 +3,127 @@ import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import fs from 'fs';
 import path from 'path';
-import { queryAll, queryOne, runSql, getDb, saveDb } from './db';
+import { queryAll, queryOne, runSql, saveDb, getPendingAlerts, markAlertAsSent } from './db';
 
 const router = Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'shop_manager_jwt_secret_key_2026';
+
+// 🔴 তোমার গুগল অ্যাপস স্ক্রিপ্ট API লিংক
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxE9gp1FvjdVN7wnis0Q_1AnZ37w-OJDYLWeRiz7qpzMx3AagKSiN8nOZrfUWxHjaY9/exec';
+
+// --- API দিয়ে ইমেইল পাঠানোর ফাংশন ---
+const sendEmailViaAPI = async (to: string, subject: string, html: string) => {
+  try {
+    const response = await fetch(GOOGLE_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ to, subject, html }),
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' } // CORS ইস্যু এড়াতে plain text
+    });
+    console.log('[Email API] Status:', await response.text());
+  } catch (error) {
+    console.error('[Email API] Error:', error);
+  }
+};
+
+// ==================== INSTANT CONNECTION EMAIL FUNCTION ====================
+export const checkAndSendConnectionEmail = async () => {
+  try {
+    const currentEmailObj = queryOne<any>('SELECT value FROM settings WHERE key = "email"');
+    const lastConnectedEmailObj = queryOne<any>('SELECT value FROM settings WHERE key = "last_connected_email"');
+
+    const currentEmail = currentEmailObj?.value;
+    const lastConnectedEmail = lastConnectedEmailObj?.value;
+
+    if (currentEmail && currentEmail !== lastConnectedEmail) {
+      const subject = '✅ সিস্টেম কানেক্টেড: Nexus ERP POS';
+      const html = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #16a34a; background-color: #f0fdf4; border-radius: 8px;">
+          <h2 style="color: #16a34a; margin-top: 0;">✅ কানেকশন সফল!</h2>
+          <p style="color: #333; font-size: 16px;">প্রিয় শপ মালিক,</p>
+          <p style="color: #555; font-size: 15px;">আপনার <strong>Nexus ERP POS</strong> সিস্টেমের সাথে এই ইমেইলটি সফলভাবে যুক্ত হয়েছে।</p>
+          <p style="color: #555; font-size: 15px;">এখন থেকে প্রতিদিন <strong>সন্ধ্যা ৬:০০ টায়</strong> আপনার শপের স্টক এবং মেয়াদের রিপোর্ট এই ইমেইলে স্বয়ংক্রিয়ভাবে চলে আসবে।</p>
+          <hr style="border: 0; border-top: 1px solid #ddd; margin: 25px 0;" />
+          <p style="font-size: 12px; color: #888; margin: 0;">নেক্সাস ইআরপি পিওএস - অটো অ্যালার্ট সিস্টেম</p>
+        </div>
+      `;
+
+      await sendEmailViaAPI(currentEmail, subject, html);
+      console.log(`[Email Alert] Connection confirmation sent to ${currentEmail}`);
+
+      runSql('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', ['last_connected_email', currentEmail]);
+    }
+  } catch (error) {
+    console.error('[Email Alert] Error in checkAndSendConnectionEmail:', error);
+  }
+};
+
+// ==================== DAILY EMAIL ALERT FUNCTION ====================
+export const runDailyEmailAlerts = async () => {
+  runSql('UPDATE products SET is_stock_alert_sent = 0 WHERE stock > min_stock_alert');
+
+  const settingsObj = queryOne<any>('SELECT value FROM settings WHERE key = "email"');
+  const targetEmail = settingsObj?.value;
+
+  if (!targetEmail) {
+    console.log('[Email Alert] No target email found in settings. Skipping daily alerts.');
+    return;
+  }
+
+  const { stockAlerts, expiryAlerts } = getPendingAlerts(45);
+
+  if (stockAlerts.length === 0 && expiryAlerts.length === 0) {
+    console.log('[Email Alert] No pending alerts for today.');
+    return; 
+  }
+
+  let emailHtml = `
+    <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #ddd; background-color: #f9f9f9; border-radius: 8px;">
+      <h2 style="color: #333; margin-top: 0;">📊 দৈনিক শপ অ্যালার্ট রিপোর্ট</h2>
+      <p style="color: #555; font-size: 15px;">প্রিয় শপ মালিক,</p>
+      <p style="color: #555; font-size: 15px;">আপনার শপের যে প্রোডাক্টগুলোর স্টক কমে গেছে বা শেষ হয়ে গেছে এবং যেগুলোর মেয়াদ শীঘ্রই শেষ হবে, তার আজকের সারাংশ নিচে দেওয়া হলো:</p>
+  `;
+
+  let hasAlerts = false;
+
+  if (stockAlerts.length > 0) {
+    hasAlerts = true;
+    emailHtml += `<h3 style="color: #d9534f; border-bottom: 2px solid #d9534f; padding-bottom: 5px;">⚠️ স্টক কমে গেছে / স্টক শেষ</h3><ul style="list-style-type: none; padding: 0;">`;
+    for (const item of stockAlerts) {
+      emailHtml += `<li style="margin-bottom: 10px; padding: 10px; background-color: #fff; border-left: 4px solid #d9534f; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <strong style="font-size: 16px;">${item.name}</strong><br/>
+        বর্তমান স্টক: <span style="color: red; font-weight: bold;">${item.stock}</span> (অ্যালার্ট লিমিট: ${item.min_stock_alert})
+      </li>`;
+      markAlertAsSent(item.id, 'stock'); 
+    }
+    emailHtml += `</ul>`;
+  }
+
+  if (expiryAlerts.length > 0) {
+    hasAlerts = true;
+    emailHtml += `<h3 style="color: #f0ad4e; border-bottom: 2px solid #f0ad4e; padding-bottom: 5px; margin-top: 20px;">⏳ মেয়াদ শীঘ্রই শেষ হবে (আগামী ৪৫ দিনের মধ্যে)</h3><ul style="list-style-type: none; padding: 0;">`;
+    for (const item of expiryAlerts) {
+      emailHtml += `<li style="margin-bottom: 10px; padding: 10px; background-color: #fff; border-left: 4px solid #f0ad4e; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <strong style="font-size: 16px;">${item.name}</strong><br/>
+        মেয়াদ শেষের তারিখ: <span style="color: #d9534f; font-weight: bold;">${item.expire_date}</span>
+      </li>`;
+      markAlertAsSent(item.id, 'expiry'); 
+    }
+    emailHtml += `</ul>`;
+  }
+
+  emailHtml += `
+      <hr style="border: 0; border-top: 1px solid #ddd; margin: 25px 0;" />
+      <p style="font-size: 12px; color: #888; margin: 0;">নেক্সাস ইআরপি পিওএস (Nexus ERP) - অটো অ্যালার্ট সিস্টেম</p>
+    </div>
+  `;
+
+  if (hasAlerts) {
+    const subject = `📊 দৈনিক অ্যালার্ট: স্টক শেষ ও মেয়াদের কাছাকাছি প্রোডাক্ট`;
+    await sendEmailViaAPI(targetEmail, subject, emailHtml);
+    console.log(`[Email Alert] Daily alert report sent successfully to ${targetEmail}`);
+  }
+};
+// ====================================================================
 
 // Middleware to authenticate JWT
 export const authenticateToken = (req: Request, res: Response, next: NextFunction) => {
@@ -361,7 +478,8 @@ router.put('/products/:id', authenticateToken, (req: Request, res: Response) => 
     UPDATE products SET
     name = ?, barcode = ?, category_id = ?, brand_id = ?,
     purchase_price = ?, selling_price = ?, wholesale_price = ?,
-    stock = ?, min_stock_alert = ?, expire_date = ?, image = ?
+    stock = ?, min_stock_alert = ?, expire_date = ?, image = ?,
+    is_expiry_alert_sent = 0 
     WHERE id = ?
   `, [
     name, barcode, category_id || null, brand_id || null,
@@ -1043,7 +1161,7 @@ router.post('/purchases', authenticateToken, (req: Request, res: Response) => {
     `, [purchaseId, item.product_id, q, p, q * p, itemExpire]);
 
     if (itemExpire && String(itemExpire).trim() !== '') {
-      runSql('UPDATE products SET stock = stock + ?, purchase_price = ?, expire_date = ? WHERE id = ?', [q, p, itemExpire, item.product_id]);
+      runSql('UPDATE products SET stock = stock + ?, purchase_price = ?, expire_date = ?, is_expiry_alert_sent = 0 WHERE id = ?', [q, p, itemExpire, item.product_id]);
     } else {
       runSql('UPDATE products SET stock = stock + ?, purchase_price = ? WHERE id = ?', [q, p, item.product_id]);
     }
@@ -1072,7 +1190,6 @@ router.get('/purchases', authenticateToken, (req: Request, res: Response) => {
   res.json(purchases);
 });
 
-// --- NEW ROUTE FOR FETCHING SINGLE PURCHASE INVOICE ---
 router.get('/purchases/:id', authenticateToken, (req: Request, res: Response) => {
   const { id } = req.params;
   const purchase = queryOne(`
@@ -1096,7 +1213,6 @@ router.get('/purchases/:id', authenticateToken, (req: Request, res: Response) =>
     res.json({ ...purchase, items: [] });
   }
 });
-// --------------------------------------------------------
 
 router.post('/purchases/:id/pay', authenticateToken, (req: Request, res: Response) => {
   const { id } = req.params;
@@ -1584,6 +1700,11 @@ router.put('/settings', authenticateToken, (req: Request, res: Response) => {
   for (const [key, value] of Object.entries(settingsObj)) {
     runSql('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)', [key, String(value)]);
   }
+  
+  if (settingsObj.email) {
+    checkAndSendConnectionEmail().catch(err => console.error("Error triggering connection email:", err));
+  }
+  
   res.json({ message: 'Settings updated successfully' });
 });
 

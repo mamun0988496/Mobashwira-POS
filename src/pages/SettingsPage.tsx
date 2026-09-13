@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useShop } from '../context/ShopContext';
-import { Settings, Save, Store, DollarSign, Globe, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Settings, Save, Store, DollarSign, Globe, RotateCcw, AlertTriangle, Shield } from 'lucide-react';
 import { Language } from '../i18n/translations';
 import { validateBDPhone, sanitizeBDPhoneInput } from '../utils/phone';
 import { BackupPage } from './BackupPage';
@@ -15,6 +15,7 @@ export const SettingsPage: React.FC = () => {
   const [currencySymbol, setCurrencySymbol] = useState<string>(settings.currency || '৳');
   const [invoiceDesign, setInvoiceDesign] = useState<'58mm' | 'A4'>(settings.invoice_design || 'A4');
   const [appLanguage, setAppLanguage] = useState<Language>(language || 'bn');
+  const [settingsPassword, setSettingsPassword] = useState<string>(settings.settings_password || ''); // 🔴 পাসওয়ার্ড স্টেট যুক্ত করা হয়েছে
   const [saving, setSaving] = useState<boolean>(false);
   const [showResetModal, setShowResetModal] = useState<boolean>(false);
   const [resetting, setResetting] = useState<boolean>(false);
@@ -27,6 +28,7 @@ export const SettingsPage: React.FC = () => {
     setCurrencySymbol(settings.currency || '৳');
     setInvoiceDesign(settings.invoice_design || 'A4');
     setAppLanguage(language || 'bn');
+    setSettingsPassword(settings.settings_password || ''); // 🔴 ডাটাবেস থেকে পাসওয়ার্ড লোড করা হচ্ছে
   }, [settings, language]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -47,11 +49,17 @@ export const SettingsPage: React.FC = () => {
         email: shopEmail,
         currency: currencySymbol,
         invoice_design: invoiceDesign,
-        language: appLanguage
+        language: appLanguage,
+        settings_password: settingsPassword // 🔴 ডাটাবেসে পাসওয়ার্ড সেভ করা হচ্ছে
       });
       if (appLanguage !== language) {
         setLanguage(appLanguage);
       }
+      
+      showToast('success', appLanguage === 'bn' ? 'সেটিংস সফলভাবে সেভ হয়েছে!' : 'Settings saved successfully!');
+      
+    } catch (error) {
+      showToast('error', appLanguage === 'bn' ? 'সেটিংস সেভ করতে সমস্যা হয়েছে!' : 'Failed to save settings!');
     } finally {
       setSaving(false);
     }
@@ -87,7 +95,7 @@ export const SettingsPage: React.FC = () => {
 
       <form onSubmit={handleSubmit} className="bg-white/40 dark:bg-slate-800/40 backdrop-blur-xl p-6 rounded-2xl border border-white/60 dark:border-slate-700/60 shadow-xl shadow-slate-200/50 dark:shadow-none space-y-6 text-xs">
         
-        {/* Language Option (বাংলা & English) */}
+        {/* Language Option */}
         <div>
           <h4 className="font-bold text-slate-900 dark:text-slate-100 text-sm mb-3 flex items-center gap-2">
             <Globe className="w-4 h-4 text-indigo-600 dark:text-indigo-400" /> {t('languageSelection')}
@@ -197,14 +205,39 @@ export const SettingsPage: React.FC = () => {
           </div>
         </div>
 
+        {/* ================= Security Settings (নতুন যুক্ত করা হলো) ================= */}
+        <div className="pt-4 border-t border-white/40 dark:border-slate-700/40">
+          <h4 className="font-bold text-slate-900 dark:text-slate-100 text-sm mb-3 flex items-center gap-2">
+            <Shield className="w-4 h-4 text-rose-600 dark:text-rose-400" /> Security Settings (সেটিংস পাসওয়ার্ড)
+          </h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="font-semibold block mb-1 text-slate-700 dark:text-slate-300">Settings Page Password</label>
+              <input
+                type="text"
+                value={settingsPassword}
+                onChange={(e) => setSettingsPassword(e.target.value)}
+                className="w-full p-2.5 bg-white/60 dark:bg-slate-900/60 border border-white/80 dark:border-slate-700/60 rounded-xl text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-rose-500/50"
+                placeholder="পাসওয়ার্ড দিন (ফাঁকা রাখলে পাসওয়ার্ড চাইবে না)"
+              />
+              <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
+                এই পাসওয়ার্ড সেট করলে সাইডবার থেকে সেটিংসে আসার সময় প্রতিবার পাসওয়ার্ড দিয়ে প্রবেশ করতে হবে।
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Save Button */}
         <div className="pt-3 flex justify-end">
           <button
             type="submit"
             disabled={saving}
-            className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 cursor-pointer"
+            className={`px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-600/20 transition-all flex items-center gap-2 ${saving ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}`}
           >
-            <Save className="w-4 h-4" /> {t('saveSettingsBtn')}
+            <Save className={`w-4 h-4 ${saving ? 'animate-pulse' : ''}`} /> 
+            {saving 
+              ? (appLanguage === 'bn' ? 'সেভ হচ্ছে...' : 'Saving...') 
+              : t('saveSettingsBtn')}
           </button>
         </div>
       </form>
@@ -253,7 +286,7 @@ export const SettingsPage: React.FC = () => {
                   {appLanguage === 'bn' ? 'সম্পূর্ণ অ্যাপ রিসেট কনফার্মেশন' : 'Confirm Full App Reset'}
                 </h3>
                 <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold">
-                  {appLanguage === 'bn' ? 'সতর্কতা: এটি আর ফিরিয়ে আনা যাবে না!' : 'Warning: Action cannot be undone!'}
+                  {appLanguage === 'bn' ? 'সতর্কতা: এটি আর ফিরিয়ে আনা যাবে না!' : 'Warning: Action cannot be undone!'}
                 </p>
               </div>
             </div>
@@ -291,4 +324,3 @@ export const SettingsPage: React.FC = () => {
     </div>
   );
 };
-

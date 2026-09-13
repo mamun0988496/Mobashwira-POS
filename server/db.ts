@@ -90,6 +90,7 @@ function initSchema(database: Database) {
     try { database.run(sql); } catch (e) {}
   }
 
+  // Ensure alert tracking columns exist
   try { database.run('ALTER TABLE products ADD COLUMN is_stock_alert_sent INTEGER DEFAULT 0;'); } catch (e) {}
   try { database.run('ALTER TABLE products ADD COLUMN is_expiry_alert_sent INTEGER DEFAULT 0;'); } catch (e) {}
 
@@ -160,56 +161,44 @@ export function runSql(sql: string, params: any[] = []): { lastInsertRowid: numb
   return { lastInsertRowid: lastId, changes };
 }
 
-
-// --- WhatsApp Alert Helpers ---
-export function getPendingAlerts(daysThreshold = 15) {
+// ==========================================
+// ALERT HELPERS
+// ==========================================
+export function getPendingAlerts(daysThreshold = 45) {
   if (!db) return { stockAlerts: [], expiryAlerts: [] };
-  
-  const stockSql = `SELECT id, name, stock FROM products WHERE stock <= 0 AND (is_stock_alert_sent = 0 OR is_stock_alert_sent IS NULL)`;
+
+  // Fetch low stock items (including 0 stock) that haven't been alerted yet
+  const stockSql = `SELECT id, name, stock, min_stock_alert FROM products WHERE stock <= min_stock_alert AND (is_stock_alert_sent = 0 OR is_stock_alert_sent IS NULL)`;
   const stockAlerts = queryAll(stockSql);
-  
-  // null স্ট্রিং বা undefined স্ট্রিং থাকলে সেটাকেও বাদ দিয়ে কোয়েরি করবে
+
+  // Fetch expiry items that haven't been alerted yet
   const expirySql = `SELECT id, name, expire_date FROM products WHERE expire_date IS NOT NULL AND expire_date != '' AND expire_date != 'null' AND expire_date != 'undefined' AND (is_expiry_alert_sent = 0 OR is_expiry_alert_sent IS NULL)`;
   const allProductsWithDate = queryAll(expirySql);
-  
-  console.log("\n--- Debug Info ---");
-  console.log("স্টক জিরো এমন প্রোডাক্ট পাওয়া গেছে:", stockAlerts.length, "টি");
-  console.log("মেয়াদ আছে এমন প্রোডাক্ট ডাটাবেস থেকে পাওয়া গেছে:", allProductsWithDate.length, "টি");
 
   const targetDate = new Date();
   targetDate.setDate(targetDate.getDate() + daysThreshold);
-  
+
   const expiryAlerts = allProductsWithDate.filter(p => {
     let dateStr = String(p.expire_date).trim();
     let exp = new Date(dateStr);
     
-    // যদি ডেট DD/MM/YYYY বা DD-MM-YYYY ফরম্যাটে থাকে, তবে সেটা ঠিক করে নেওয়া
+    // YYYY-MM-DD Format check
     if (isNaN(exp.getTime()) && dateStr.match(/^\d{2}[\/\-]\d{2}[\/\-]\d{4}$/)) {
         const parts = dateStr.split(/[\/\-]/);
-        exp = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`); // YYYY-MM-DD
+        exp = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`); 
     }
     
     const isValidDate = !isNaN(exp.getTime());
-    
-    console.log(`প্রোডাক্ট: "${p.name}" | সেভ করা মেয়াদ: "${dateStr}" | পার্স করা মেয়াদ: ${isValidDate ? exp.toDateString() : 'Invalid Date'}`);
-    
     if (isValidDate) {
         return exp <= targetDate;
     }
     return false;
   });
-  
-  console.log("------------------\n");
-  
+
   return { stockAlerts, expiryAlerts };
 }
 
 export function markAlertAsSent(productId: number, type: 'stock' | 'expiry') {
   const column = type === 'stock' ? 'is_stock_alert_sent' : 'is_expiry_alert_sent';
   runSql(`UPDATE products SET ${column} = 1 WHERE id = ?`, [productId]);
-}
-
-export function resetAlert(productId: number, type: 'stock' | 'expiry') {
-  const column = type === 'stock' ? 'is_stock_alert_sent' : 'is_expiry_alert_sent';
-  runSql(`UPDATE products SET ${column} = 0 WHERE id = ?`, [productId]);
 }
