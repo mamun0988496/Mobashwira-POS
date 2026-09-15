@@ -521,7 +521,7 @@ var require_has_flag = __commonJS({
 var require_supports_color = __commonJS({
   "node_modules/supports-color/index.js"(exports2, module2) {
     "use strict";
-    var os = require("os");
+    var os2 = require("os");
     var tty = require("tty");
     var hasFlag = require_has_flag();
     var { env } = process;
@@ -569,7 +569,7 @@ var require_supports_color = __commonJS({
         return min;
       }
       if (process.platform === "win32") {
-        const osRelease = os.release().split(".");
+        const osRelease = os2.release().split(".");
         if (Number(osRelease[0]) >= 10 && Number(osRelease[2]) >= 10586) {
           return Number(osRelease[2]) >= 14931 ? 3 : 2;
         }
@@ -62292,11 +62292,34 @@ var init_routes = __esm({
 // server.ts
 var import_express2 = __toESM(require_express2());
 var import_cors = __toESM(require_lib3());
+var import_os = __toESM(require("os"));
 init_db();
 var app = (0, import_express2.default)();
 var PORT = process.env.PORT || 3e3;
 app.use((0, import_cors.default)());
 app.use(import_express2.default.json());
+function getLocalIP() {
+  const interfaces = import_os.default.networkInterfaces();
+  for (const devName in interfaces) {
+    const iface = interfaces[devName];
+    if (iface) {
+      for (let i = 0; i < iface.length; i++) {
+        const alias = iface[i];
+        if (alias.family === "IPv4" && alias.address !== "127.0.0.1" && !alias.internal) {
+          return alias.address;
+        }
+      }
+    }
+  }
+  return "0.0.0.0";
+}
+app.get("/api/server-info", (req, res) => {
+  res.json({
+    ip: getLocalIP(),
+    port: PORT,
+    key: "mobashwira123"
+  });
+});
 async function startServer() {
   console.log("Initializing database...");
   await getDb();
@@ -62361,7 +62384,7 @@ async function startServer() {
     }
   }
   app.listen(PORT, "0.0.0.0", () => {
-    console.log("Backend server running on port " + PORT);
+    console.log(`Backend server running on http://${getLocalIP()}:${PORT}`);
     console.log("\u2705 Email Alert System is Active.");
     if (typeof checkAndSendConnectionEmail2 === "function") {
       checkAndSendConnectionEmail2();

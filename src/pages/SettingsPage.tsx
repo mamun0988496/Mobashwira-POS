@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { QRCodeSVG } from 'qrcode.react'; 
 import { useShop } from '../context/ShopContext';
-import { Settings, Save, Store, DollarSign, Globe, RotateCcw, AlertTriangle, Shield } from 'lucide-react';
+import { Settings, Save, Store, DollarSign, Globe, RotateCcw, AlertTriangle, Shield, Smartphone } from 'lucide-react'; 
 import { Language } from '../i18n/translations';
 import { validateBDPhone, sanitizeBDPhoneInput } from '../utils/phone';
 import { BackupPage } from './BackupPage';
@@ -15,10 +16,14 @@ export const SettingsPage: React.FC = () => {
   const [currencySymbol, setCurrencySymbol] = useState<string>(settings.currency || '৳');
   const [invoiceDesign, setInvoiceDesign] = useState<'58mm' | 'A4'>(settings.invoice_design || 'A4');
   const [appLanguage, setAppLanguage] = useState<Language>(language || 'bn');
-  const [settingsPassword, setSettingsPassword] = useState<string>(settings.settings_password || ''); // 🔴 পাসওয়ার্ড স্টেট যুক্ত করা হয়েছে
+  const [settingsPassword, setSettingsPassword] = useState<string>(settings.settings_password || '');
   const [saving, setSaving] = useState<boolean>(false);
   const [showResetModal, setShowResetModal] = useState<boolean>(false);
   const [resetting, setResetting] = useState<boolean>(false);
+  
+  // QR Code এর ডাটা এবং পপআপ কন্ট্রোল করার স্টেট
+  const [qrData, setQrData] = useState<string | null>(null);
+  const [showQRModal, setShowQRModal] = useState<boolean>(false); // 🔴 নতুন স্টেট
 
   useEffect(() => {
     setShopName(settings.shop_name || '');
@@ -28,8 +33,17 @@ export const SettingsPage: React.FC = () => {
     setCurrencySymbol(settings.currency || '৳');
     setInvoiceDesign(settings.invoice_design || 'A4');
     setAppLanguage(language || 'bn');
-    setSettingsPassword(settings.settings_password || ''); // 🔴 ডাটাবেস থেকে পাসওয়ার্ড লোড করা হচ্ছে
+    setSettingsPassword(settings.settings_password || '');
   }, [settings, language]);
+
+  useEffect(() => {
+    fetch('http://localhost:3000/api/server-info')
+      .then((res) => res.json())
+      .then((data) => {
+        setQrData(JSON.stringify(data));
+      })
+      .catch((err) => console.log('Error loading server info:', err));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +64,7 @@ export const SettingsPage: React.FC = () => {
         currency: currencySymbol,
         invoice_design: invoiceDesign,
         language: appLanguage,
-        settings_password: settingsPassword // 🔴 ডাটাবেসে পাসওয়ার্ড সেভ করা হচ্ছে
+        settings_password: settingsPassword
       });
       if (appLanguage !== language) {
         setLanguage(appLanguage);
@@ -205,10 +219,10 @@ export const SettingsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* ================= Security Settings (নতুন যুক্ত করা হলো) ================= */}
+        {/* Security Settings */}
         <div className="pt-4 border-t border-white/40 dark:border-slate-700/40">
           <h4 className="font-bold text-slate-900 dark:text-slate-100 text-sm mb-3 flex items-center gap-2">
-            <Shield className="w-4 h-4 text-rose-600 dark:text-rose-400" /> Security Settings (সেটিংস পাসওয়ার্ড)
+            <Shield className="w-4 h-4 text-rose-600 dark:text-rose-400" /> Security Settings (সেটিংস পাসওয়ার্ড)
           </h4>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
@@ -218,17 +232,46 @@ export const SettingsPage: React.FC = () => {
                 value={settingsPassword}
                 onChange={(e) => setSettingsPassword(e.target.value)}
                 className="w-full p-2.5 bg-white/60 dark:bg-slate-900/60 border border-white/80 dark:border-slate-700/60 rounded-xl text-slate-800 dark:text-slate-100 outline-none focus:ring-2 focus:ring-rose-500/50"
-                placeholder="পাসওয়ার্ড দিন (ফাঁকা রাখলে পাসওয়ার্ড চাইবে না)"
+                placeholder="পাসওয়ার্ড দিন (ফাঁকা রাখলে পাসওয়ার্ড চাইবে না)"
               />
               <p className="text-[10px] text-slate-500 mt-1.5 leading-relaxed">
-                এই পাসওয়ার্ড সেট করলে সাইডবার থেকে সেটিংসে আসার সময় প্রতিবার পাসওয়ার্ড দিয়ে প্রবেশ করতে হবে।
+                এই পাসওয়ার্ড সেট করলে সাইডবার থেকে সেটিংসে আসার সময় প্রতিবার পাসওয়ার্ড দিয়ে প্রবেশ করতে হবে।
               </p>
             </div>
           </div>
         </div>
 
+        {/* ================= 🔴 Mobile App Connection (বাটন এবং পপআপ) ================= */}
+        <div className="pt-4 border-t border-white/40 dark:border-slate-700/40">
+          <h4 className="font-bold text-slate-900 dark:text-slate-100 text-sm mb-3 flex items-center gap-2">
+            <Smartphone className="w-4 h-4 text-blue-600 dark:text-blue-400" /> {appLanguage === 'bn' ? 'মোবাইল অ্যাপ কানেকশন' : 'Mobile App Connection'}
+          </h4>
+          <div className="flex flex-col sm:flex-row justify-between items-center bg-blue-50/50 dark:bg-blue-900/20 p-5 rounded-2xl border border-blue-100 dark:border-blue-800/30 gap-4">
+            <div className="flex-1 space-y-1 text-center sm:text-left">
+              <h5 className="font-bold text-sm text-slate-800 dark:text-slate-200">
+                {appLanguage === 'bn' ? 'মোবাইল থেকে স্ক্যান করুন' : 'Scan from Mobile'}
+              </h5>
+              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                {appLanguage === 'bn' 
+                  ? 'মোবাইল অ্যাপটিকে কম্পিউটারের সাথে কানেক্ট করতে QR কোড জেনারেট করে স্ক্যান করুন।' 
+                  : 'Generate and scan the QR code from the mobile app to connect it with your computer.'}
+              </p>
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => setShowQRModal(true)}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-600/20 transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <Smartphone className="w-4 h-4" />
+              {appLanguage === 'bn' ? 'QR কোড দেখান' : 'Show QR Code'}
+            </button>
+          </div>
+        </div>
+        {/* ========================================================================= */}
+
         {/* Save Button */}
-        <div className="pt-3 flex justify-end">
+        <div className="pt-4 flex justify-end">
           <button
             type="submit"
             disabled={saving}
@@ -273,6 +316,49 @@ export const SettingsPage: React.FC = () => {
         </div>
       </div>
 
+      {/* 🔴 QR Code Modal (নতুন পপআপ) */}
+      {showQRModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl max-w-sm w-full p-8 space-y-6 border border-slate-200 dark:border-slate-700 shadow-2xl text-center">
+            
+            <div>
+              <h3 className="font-bold text-lg text-slate-900 dark:text-slate-100">
+                {appLanguage === 'bn' ? 'মোবাইল অ্যাপ কানেক্ট করুন' : 'Connect Mobile App'}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {appLanguage === 'bn' ? 'মোবাইল থেকে এই কোডটি স্ক্যান করুন' : 'Scan this code from your mobile'}
+              </p>
+            </div>
+
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 inline-block mx-auto">
+              {qrData ? (
+                <QRCodeSVG value={qrData} size={220} />
+              ) : (
+                <div className="w-[220px] h-[220px] flex items-center justify-center bg-slate-100 rounded-xl text-slate-400 text-sm font-medium animate-pulse">
+                  QR তৈরি হচ্ছে...
+                </div>
+              )}
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-xl border border-blue-100 dark:border-blue-800/30">
+              <p className="text-xs text-blue-700 dark:text-blue-300 font-medium">
+                {appLanguage === 'bn' 
+                  ? 'নিশ্চিত করুন যে পিসি এবং ফোন একই ওয়াইফাই নেটওয়ার্কে যুক্ত আছে।' 
+                  : 'Ensure both PC and phone are connected to the same WiFi network.'}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowQRModal(false)}
+              className="w-full py-2.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-sm rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors cursor-pointer"
+            >
+              {appLanguage === 'bn' ? 'বন্ধ করুন' : 'Close'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* App Reset Confirmation Modal */}
       {showResetModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
@@ -286,7 +372,7 @@ export const SettingsPage: React.FC = () => {
                   {appLanguage === 'bn' ? 'সম্পূর্ণ অ্যাপ রিসেট কনফার্মেশন' : 'Confirm Full App Reset'}
                 </h3>
                 <p className="text-xs text-rose-600 dark:text-rose-400 font-semibold">
-                  {appLanguage === 'bn' ? 'সতর্কতা: এটি আর ফিরিয়ে আনা যাবে না!' : 'Warning: Action cannot be undone!'}
+                  {appLanguage === 'bn' ? 'সতর্কতা: এটি আর ফিরিয়ে আনা যাবে্বা না!' : 'Warning: Action cannot be undone!'}
                 </p>
               </div>
             </div>

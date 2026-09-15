@@ -1,5 +1,6 @@
 ﻿import express from 'express';
 import cors from 'cors';
+import os from 'os'; // 🔴 নতুন যুক্ত করা হয়েছে (IP বের করার জন্য)
 import { getDb } from './server/db';
 
 const app = express();
@@ -7,6 +8,36 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+
+// ===============================================
+// 🔴 অটোমেটিক পিসির IP বের করার ফাংশন
+// ===============================================
+function getLocalIP() {
+  const interfaces = os.networkInterfaces();
+  for (const devName in interfaces) {
+    const iface = interfaces[devName];
+    if (iface) {
+      for (let i = 0; i < iface.length; i++) {
+        const alias = iface[i];
+        // শুধুমাত্র IPv4 এবং লোকালহোস্ট ছাড়া আসল আইপিটা নিবে
+        if (alias.family === 'IPv4' && alias.address !== '127.0.0.1' && !alias.internal) {
+          return alias.address;
+        }
+      }
+    }
+  }
+  return '0.0.0.0'; // যদি না পায় তবে ডিফল্ট
+}
+
+// 🔴 ফোনের স্ক্যানারের জন্য QR কোড ডাটা API
+app.get('/api/server-info', (req, res) => {
+  res.json({
+    ip: getLocalIP(),
+    port: PORT,
+    key: 'mobashwira123'
+  });
+});
+// ===============================================
 
 // ---------------------------------------------------------
 // Backend Server Setup
@@ -57,12 +88,10 @@ async function startServer() {
     const hours = now.getHours();
     const minutes = now.getMinutes();
 
-    // Reset sending status exactly at midnight
     if (hours === 0) {
       hasSentToday = false;
     }
 
-    // Run Daily alert at 6:00 PM (18:00)
     if (hours === 18 && minutes === 0 && !hasSentToday) {
       console.log('[Scheduler] Time is 6:00 PM. Running daily email alerts...');
       if (typeof runDailyEmailAlerts === 'function') {
@@ -86,11 +115,11 @@ async function startServer() {
     }
   }
 
+  // 🔴 '0.0.0.0' ব্যবহার করা হয়েছে যেন বাইরের ফোন পিসিকে খুঁজে পায়
   app.listen(PORT, '0.0.0.0', () => {
-    console.log('Backend server running on port ' + PORT);
+    console.log(`Backend server running on http://${getLocalIP()}:${PORT}`);
     console.log('✅ Email Alert System is Active.');
 
-    // 🔴 অ্যাপ রান হওয়ার সাথে সাথে ইমেইল চেক করবে, নতুন জিমেইল থাকলে ওয়েলকাম মেসেজ পাঠাবে
     if (typeof checkAndSendConnectionEmail === 'function') {
       checkAndSendConnectionEmail();
     }
