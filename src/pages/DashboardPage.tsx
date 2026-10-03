@@ -87,12 +87,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onView
       badgeColor: 'text-emerald-600 bg-emerald-100/80 dark:bg-emerald-500/20 dark:text-emerald-400'
     },
     {
-      title: isBn ? 'শপে মোট পণ্যের মূল্য' : 'Total Stock Value',
-      value: formatCurrency(stats?.totalStockValue || 0),
-      subtitle: `${isBn ? 'ক্রয় মূল্য: ' : 'Cost: '}${formatCurrency(stats?.totalStockCostValue || 0)}`,
+      title: isBn ? 'মোট স্টক ভ্যালু + বকেয়া' : 'Total Stock + Due',
+      value: formatCurrency((stats?.totalStockValue || 0) + (stats?.totalCustomerDue || 0)), // স্টক ভ্যালু + বকেয়া যোগ করা হয়েছে
+      subtitle: `${isBn ? 'ক্রয় মূল্য: ' : 'Cost: '}${formatCurrency(stats?.totalStockCostValue || 0)}`, // শুধু Cost দেখাবে আগের মতো
       icon: ShoppingBag,
       gradient: 'from-indigo-400 to-indigo-600 shadow-indigo-500/30',
-      badge: isBn ? 'ইন স্টক' : 'In Stock',
+      badge: isBn ? 'মোট সম্পদ' : 'Total Asset',
       badgeColor: 'text-indigo-600 bg-indigo-100/80 dark:bg-indigo-500/20 dark:text-indigo-400'
     },
     {
@@ -126,6 +126,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ onNavigate, onView
                 </div>
               </div>
               <h3 className="text-xl lg:text-3xl font-black text-slate-800 dark:text-slate-100 mt-2 tracking-tight">{card.value}</h3>
+              
+              {/* সাবটাইটেল সেকশন আগের মতো করা হয়েছে */}
               <div className="mt-3 flex items-center justify-between text-[10px]">
                 <span className="text-slate-400 font-bold">{card.subtitle}</span>
                 <span className={`font-bold flex items-center gap-1 px-2 py-0.5 rounded-full border border-current/10 ${card.badgeColor}`}>
